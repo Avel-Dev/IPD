@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Navbar } from "./components/Navbar";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
+import { SurplusSettings } from "./pages/SurplusSettings";
 
 function RequireAuth({ children }) {
   const location = useLocation();
@@ -46,6 +47,14 @@ export default function App() {
                 onDisconnect={handleDisconnect}
                 onWalletUpdated={handleWalletConnected}
               />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/surplus-settings"
+          element={
+            <RequireAuth>
+              <SurplusSettings />
             </RequireAuth>
           }
         />

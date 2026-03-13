@@ -1,11 +1,14 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-  const SimpleStorage = await ethers.getContractFactory("SimpleStorage");
-  const simpleStorage = await SimpleStorage.deploy();
-  await simpleStorage.waitForDeployment();
+  const EnergyTrading = await ethers.getContractFactory("EnergyTrading");
+  const energyTrading = await EnergyTrading.deploy();
+  await energyTrading.waitForDeployment();
 
-  console.log("SimpleStorage deployed to:", await simpleStorage.getAddress());
+  console.log("EnergyTrading deployed to:", await energyTrading.getAddress());
+  
+  // Optional: Deploy SimpleStorage if it's still needed, 
+  // but we'll focus on EnergyTrading for this feature.
 }
 
 main().catch((err) => {

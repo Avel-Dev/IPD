@@ -36,6 +36,11 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
   const [energyConsumed, setEnergyConsumed] = useState(0);
   const [energySurplus, setEnergySurplus] = useState(0);
 
+  // Diversion Stats
+  const [surplusLimit, setSurplusLimit] = useState(0);
+  const [energyDiverted, setEnergyDiverted] = useState(0);
+  const [centralBatteryLevel, setCentralBatteryLevel] = useState(0);
+
   // Per-house energy history for visualization
   const [selectedHouseId, setSelectedHouseId] = useState("");
   const [energyHistory, setEnergyHistory] = useState([]);
@@ -68,11 +73,13 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
     setBalanceEth("-");
     setBlockNumber("-");
     setStatus("Disconnected");
-     // Reset energy monitoring + house-related state so we don't
      // carry totals across sessions.
      setEnergyProduced(0);
      setEnergyConsumed(0);
      setEnergySurplus(0);
+     setSurplusLimit(0);
+     setEnergyDiverted(0);
+     setCentralBatteryLevel(0);
      setSelectedHouseId("");
      setEnergyHistory([]);
      setHistoryError("");
@@ -158,6 +165,16 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
         setEnergySurplus(totals.surplusEnergy);
       } catch {
         // If energy endpoint is not used yet, keep values at zero
+      }
+
+      // Fetch diversion stats
+      try {
+        const stats = await apiRequest("/energy/diversion-stats");
+        setSurplusLimit(stats?.surplusLimit || 0);
+        setEnergyDiverted(stats?.energyDiverted || 0);
+        setCentralBatteryLevel(stats?.centralBatteryLevel || 0);
+      } catch (err) {
+        console.error("Diversion stats error", err);
       }
 
       // Fetch houses owned by this wallet
@@ -409,6 +426,36 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
             title="Surplus Energy"
             value={`${energySurplus.toFixed(2)} kWh`}
             subtitle={energySurplus >= 0 ? "Net export to grid" : "Net import from grid"}
+          />
+        </div>
+      </div>
+
+      {/* Surplus & Diversion Section */}
+      <div className="mt-10">
+        <h2 className="text-lg font-semibold text-white">Surplus Diversion & Central Battery</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Track energy diversion against your limit and global battery reserves.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            title="Surplus Limit"
+            value={`${surplusLimit.toFixed(2)} kWh`}
+            subtitle="Your defined threshold"
+          />
+          <StatCard
+            title="Current Surplus"
+            value={`${energySurplus.toFixed(2)} kWh`}
+            subtitle="Current net amount"
+          />
+          <StatCard
+            title="Energy Diverted"
+            value={`${energyDiverted.toFixed(2)} kWh`}
+            subtitle="To Central Battery"
+          />
+          <StatCard
+            title="Central Battery Level"
+            value={`${centralBatteryLevel.toFixed(2)} kWh`}
+            subtitle="Global pool capacity"
           />
         </div>
       </div>

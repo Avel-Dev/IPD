@@ -36,6 +36,42 @@
       "artifacts": [
         "SimpleStorage"
       ]
+    },
+    "/home/velu/Lumen-EnergyTrading/minimal/hardhat/contracts/EnergyTrading.sol": {
+      "lastModificationDate": 1773420989794,
+      "contentHash": "f75e2beb2ca64f107609a8eaede6a961",
+      "sourceName": "contracts/EnergyTrading.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "EnergyTrading"
+      ]
     }
   }
 }
