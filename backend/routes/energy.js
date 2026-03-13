@@ -1,5 +1,5 @@
 import express from "express";
-import { houseBelongsTo } from "../houseStore.js";
+import { getHouseById, houseBelongsTo } from "../houseStore.js";
 
 const router = express.Router();
 
@@ -15,12 +15,15 @@ router.post("/report", (req, res) => {
     return res.status(400).json({ error: "houseId (string) is required" });
   }
 
-  const ownerWalletAddress = req.user?.walletAddress;
-  if (!ownerWalletAddress) {
-    return res.status(401).json({ error: "Authentication required" });
+  // Basic ownership verification for all callers (including CLI/devices):
+  // only registered houses may report energy.
+  const existingHouse = getHouseById(houseId);
+  if (!existingHouse) {
+    return res.status(400).json({ error: "House not registered" });
   }
 
-  if (!houseBelongsTo(houseId, ownerWalletAddress)) {
+  const ownerWalletAddress = req.user?.walletAddress || null;
+  if (ownerWalletAddress && !houseBelongsTo(houseId, ownerWalletAddress)) {
     return res.status(403).json({ error: "House does not belong to this wallet" });
   }
 

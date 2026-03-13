@@ -21,7 +21,10 @@ app.get("/", (req, res) => res.json({ status: "ok", service: "minimal-backend" }
 
 app.use("/auth", authRoutes);
 app.use("/houses", verifyToken, housesRoutes);
-app.use("/energy", verifyToken, energyRoutes);
+// Energy endpoints are left unauthenticated so that hardware/CLI simulators
+// can POST reports without needing a JWT. When a JWT is present, routes can
+// still use req.user for additional checks.
+app.use("/energy", energyRoutes);
 
 // Example protected route for "dashboard" API calls
 app.get("/dashboard", verifyToken, (req, res) => {
