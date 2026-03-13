@@ -1,0 +1,18 @@
+# Minimal app ignores
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+*.cache
+
+# Env (Supabase/JWT)
+.env
+.env.*
+
+# Hardhat
+hardhat/cache/
+hardhat/artifacts/
+hardhat/typechain/
+hardhat/deployments/
+
