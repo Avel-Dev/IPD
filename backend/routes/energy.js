@@ -1,5 +1,4 @@
 import express from "express";
-import { getHouseById, houseBelongsTo } from "../houseStore.js";
 import { supabase } from "../supabaseClient.js";
 
 const router = express.Router();
@@ -12,31 +11,41 @@ router.post("/report", async (req, res) => {
     return res.status(400).json({ error: "houseId (string) is required" });
   }
 
-  // Basic ownership verification for all callers (including CLI/devices):
-  // only registered houses may report energy.
-  const existingHouse = getHouseById(houseId);
-  if (!existingHouse) {
-    return res.status(400).json({ error: "House not registered" });
-  }
-
-  const ownerWalletAddress = req.user?.walletAddress || null;
-  if (ownerWalletAddress && !houseBelongsTo(houseId, ownerWalletAddress)) {
-    return res.status(403).json({ error: "House does not belong to this wallet" });
-  }
-
-  const produced = Number(energyProduced);
-  const consumed = Number(energyConsumed);
-  const ts = Number(timestamp || Date.now());
-
-  if (!Number.isFinite(produced) || !Number.isFinite(consumed)) {
-    return res
-      .status(400)
-      .json({ error: "energyProduced and energyConsumed must be numbers" });
-  }
-
-  const surplusEnergy = produced - consumed;
-
+  // Ensure house exists in Supabase
   try {
+    const { data: house, error: houseError } = await supabase
+      .from("houses")
+      .select("house_id, owner_wallet")
+      .eq("house_id", houseId)
+      .maybeSingle();
+
+    if (houseError) {
+      // eslint-disable-next-line no-console
+      console.error("Supabase house lookup error:", houseError);
+      return res.status(500).json({ error: "Failed to verify house" });
+    }
+
+    if (!house) {
+      return res.status(400).json({ error: "House not registered" });
+    }
+
+    const ownerWalletAddress = req.user?.walletAddress || null;
+    if (ownerWalletAddress && house.owner_wallet !== ownerWalletAddress) {
+      return res.status(403).json({ error: "House does not belong to this wallet" });
+    }
+
+    const produced = Number(energyProduced);
+    const consumed = Number(energyConsumed);
+    const ts = Number(timestamp || Date.now());
+
+    if (!Number.isFinite(produced) || !Number.isFinite(consumed)) {
+      return res
+        .status(400)
+        .json({ error: "energyProduced and energyConsumed must be numbers" });
+    }
+
+    const surplusEnergy = produced - consumed;
+
     const { data, error } = await supabase
       .from("energy_reports")
       .insert({

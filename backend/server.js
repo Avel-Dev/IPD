@@ -9,6 +9,7 @@ import authRoutes from "./routes/auth.js";
 import { verifyToken } from "./middleware/auth.js";
 import energyRoutes from "./routes/energy.js";
 import housesRoutes from "./routes/houses.js";
+import { initSchema } from "./db/initSchema.js";
 
 const app = express();
 const PORT = process.env.PORT || 5005;
@@ -31,8 +32,15 @@ app.get("/dashboard", verifyToken, (req, res) => {
   res.json({ status: "ok", walletAddress: req.user.walletAddress });
 });
 
-app.listen(PORT, () => {
+// Ensure Supabase schema, then start server
+initSchema().then(() => {
+  app.listen(PORT, () => {
+    // eslint-disable-next-line no-console
+    console.log(`[minimal-backend] listening on http://localhost:${PORT}`);
+  });
+}).catch((err) => {
   // eslint-disable-next-line no-console
-  console.log(`[minimal-backend] listening on http://localhost:${PORT}`);
+  console.error("[server] Failed to initialize database schema:", err);
+  process.exit(1);
 });
 

@@ -190,7 +190,16 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
       const data = await apiRequest(
         `/energy/history/${encodeURIComponent(houseId)}?limit=100`
       );
-      setEnergyHistory(data?.records || []);
+      const raw = data?.records || [];
+      // Normalize Supabase snake_case fields into the shape expected by the chart
+      const mapped = raw.map((r) => ({
+        houseId: r.house_id ?? houseId,
+        timestamp: Number(r.timestamp),
+        energyProduced: Number(r.energy_produced ?? 0),
+        energyConsumed: Number(r.energy_consumed ?? 0),
+        surplusEnergy: Number(r.surplus_energy ?? 0)
+      }));
+      setEnergyHistory(mapped);
     } catch (err) {
       setEnergyHistory([]);
       setHistoryError(err?.message || "Failed to load energy history.");
