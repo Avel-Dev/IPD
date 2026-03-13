@@ -66,6 +66,18 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
     setBalanceEth("-");
     setBlockNumber("-");
     setStatus("Disconnected");
+     // Reset energy monitoring + house-related state so we don't
+     // carry totals across sessions.
+     setEnergyProduced(0);
+     setEnergyConsumed(0);
+     setEnergySurplus(0);
+     setSelectedHouseId("");
+     setEnergyHistory([]);
+     setHistoryError("");
+     setHouses([]);
+     setNewHouseId("");
+     setNewMeterId("");
+     setHouseError("");
     setProvider(null);
     setSigner(null);
     if (typeof onDisconnect === "function") {
@@ -151,9 +163,6 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
         const data = await apiRequest("/houses/my");
         const owned = data?.houses || [];
         setHouses(owned);
-        if (!selectedHouseId && owned.length > 0) {
-          setSelectedHouseId(owned[0].houseId);
-        }
       } catch {
         // Ignore for now; houses UI will show empty
       }
@@ -178,6 +187,25 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Ensure we only set an initial selectedHouseId when houses first load,
+  // and avoid overwriting the user's choice on subsequent refreshes.
+  useEffect(() => {
+    if (!selectedHouseId && houses.length > 0) {
+      setSelectedHouseId(houses[0].houseId);
+      return;
+    }
+
+    // If the currently selected house disappears (e.g., data reset),
+    // fall back to the first available house.
+    if (
+      selectedHouseId &&
+      houses.length > 0 &&
+      !houses.some((h) => h.houseId === selectedHouseId)
+    ) {
+      setSelectedHouseId(houses[0].houseId);
+    }
+  }, [houses, selectedHouseId]);
 
   async function loadEnergyHistory(houseId) {
     if (!houseId) {

@@ -1,5 +1,6 @@
 import express from "express";
 import { supabase } from "../supabaseClient.js";
+import { verifyToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -73,21 +74,49 @@ router.post("/report", async (req, res) => {
 });
 
 // Convenience endpoint for the dashboard to read aggregate + per-house values
-router.get("/summary", async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("energy_reports")
-      .select("house_id, energy_produced, energy_consumed, surplus_energy, timestamp")
-      .order("timestamp", { ascending: true })
-      .limit(500);
+// Protected: aggregates are scoped to the authenticated wallet's houses only.
+router.get("/summary", verifyToken, async (req, res) => {
+  const walletAddress = req.user?.walletAddress;
+  if (!walletAddress) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
 
-    if (error) {
+  try {
+    // First, find all house_ids owned by this wallet
+    const { data: houseRows, error: houseError } = await supabase
+      .from("houses")
+      .select("house_id")
+      .eq("owner_wallet", walletAddress);
+
+    if (houseError) {
       // eslint-disable-next-line no-console
-      console.error("Supabase summary error:", error);
+      console.error("Supabase houses for summary error:", houseError);
       return res.status(500).json({ error: "Failed to load energy summary" });
     }
 
-    const totals = (data || []).reduce(
+    const houseIds = (houseRows || []).map((h) => h.house_id);
+
+    if (houseIds.length === 0) {
+      return res.status(200).json({
+        totals: { energyProduced: 0, energyConsumed: 0, surplusEnergy: 0 },
+        records: []
+      });
+    }
+
+    const { data: energyRows, error: energyError } = await supabase
+      .from("energy_reports")
+      .select("house_id, energy_produced, energy_consumed, surplus_energy, timestamp")
+      .in("house_id", houseIds)
+      .order("timestamp", { ascending: true })
+      .limit(500);
+
+    if (energyError) {
+      // eslint-disable-next-line no-console
+      console.error("Supabase energy summary error:", energyError);
+      return res.status(500).json({ error: "Failed to load energy summary" });
+    }
+
+    const totals = (energyRows || []).reduce(
       (acc, r) => {
         acc.energyProduced += r.energy_produced || 0;
         acc.energyConsumed += r.energy_consumed || 0;
@@ -97,7 +126,7 @@ router.get("/summary", async (req, res) => {
       { energyProduced: 0, energyConsumed: 0, surplusEnergy: 0 }
     );
 
-    return res.status(200).json({ totals, records: data || [] });
+    return res.status(200).json({ totals, records: energyRows || [] });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("Supabase summary exception:", err);
@@ -106,7 +135,8 @@ router.get("/summary", async (req, res) => {
 });
 
 // Time-series endpoint for a specific house
-router.get("/history/:houseId", async (req, res) => {
+// Protected: history is only available for houses owned by the authenticated wallet.
+router.get("/history/:houseId", verifyToken, async (req, res) => {
   const { houseId } = req.params;
   const limitParam = req.query.limit;
   const limit = Number(limitParam) > 0 ? Number(limitParam) : 100;
@@ -115,7 +145,29 @@ router.get("/history/:houseId", async (req, res) => {
     return res.status(400).json({ error: "houseId (string) is required" });
   }
 
+  const walletAddress = req.user?.walletAddress;
+  if (!walletAddress) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
   try {
+    // Ensure this house belongs to the authenticated wallet
+    const { data: house, error: houseError } = await supabase
+      .from("houses")
+      .select("house_id, owner_wallet")
+      .eq("house_id", houseId)
+      .maybeSingle();
+
+    if (houseError) {
+      // eslint-disable-next-line no-console
+      console.error("Supabase house history error:", houseError);
+      return res.status(500).json({ error: "Failed to load energy history" });
+    }
+
+    if (!house || house.owner_wallet !== walletAddress) {
+      return res.status(403).json({ error: "House does not belong to this wallet" });
+    }
+
     const { data, error } = await supabase
       .from("energy_reports")
       .select("*")
