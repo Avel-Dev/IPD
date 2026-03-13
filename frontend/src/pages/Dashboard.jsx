@@ -30,6 +30,11 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
   const [status, setStatus] = useState("Disconnected");
   const [error, setError] = useState("");
 
+  // Energy monitoring state (aggregated across reported houses)
+  const [energyProduced, setEnergyProduced] = useState(0);
+  const [energyConsumed, setEnergyConsumed] = useState(0);
+  const [energySurplus, setEnergySurplus] = useState(0);
+
   // Keep references to provider/signer so they can be cleared on disconnect
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
@@ -112,6 +117,21 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
       setBlockNumber(String(bn));
       setBalanceEth(`${Number(ethers.formatEther(bal)).toFixed(6)} ETH`);
       setStatus("Connected");
+
+      // Fetch latest energy summary for visualization
+      try {
+        const energy = await apiRequest("/energy/summary");
+        const totals = energy?.totals || {
+          energyProduced: 0,
+          energyConsumed: 0,
+          surplusEnergy: 0
+        };
+        setEnergyProduced(totals.energyProduced);
+        setEnergyConsumed(totals.energyConsumed);
+        setEnergySurplus(totals.surplusEnergy);
+      } catch {
+        // If energy endpoint is not used yet, keep values at zero
+      }
     } catch (e) {
       setStatus("Disconnected");
       setError(e?.message || "Failed to load dashboard");
@@ -122,6 +142,15 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
 
   useEffect(() => {
     refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Periodic refresh for near real-time updates
+  useEffect(() => {
+    const id = setInterval(() => {
+      refresh();
+    }, 10000);
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -204,9 +233,42 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard title="Wallet Address" value={walletAddress || "-"} />
-        <StatCard title="ETH Balance" value={balanceEth} subtitle={onHardhat ? "Local node balance" : "Balance may vary"} />
-        <StatCard title="Network" value={networkName} subtitle={chainId != null ? `chainId: ${chainId}` : ""} />
+        <StatCard
+          title="ETH Balance"
+          value={balanceEth}
+          subtitle={onHardhat ? "Local node balance" : "Balance may vary"}
+        />
+        <StatCard
+          title="Network"
+          value={networkName}
+          subtitle={chainId != null ? `chainId: ${chainId}` : ""}
+        />
         <StatCard title="Latest Block Number" value={blockNumber} />
+      </div>
+
+      {/* Energy Monitoring Section */}
+      <div className="mt-10">
+        <h2 className="text-lg font-semibold text-white">Energy Monitoring</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Aggregated production and consumption reported by connected houses (kWh).
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCard
+            title="Energy Produced"
+            value={`${energyProduced.toFixed(2)} kWh`}
+            subtitle="Latest reported totals"
+          />
+          <StatCard
+            title="Energy Consumed"
+            value={`${energyConsumed.toFixed(2)} kWh`}
+            subtitle="Across all houses"
+          />
+          <StatCard
+            title="Surplus Energy"
+            value={`${energySurplus.toFixed(2)} kWh`}
+            subtitle={energySurplus >= 0 ? "Net export to grid" : "Net import from grid"}
+          />
+        </div>
       </div>
     </div>
   );
