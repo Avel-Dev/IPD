@@ -47,22 +47,26 @@ function randomInRange(min, max) {
   return Math.random() * (max - min) + min;
 }
 
-async function simulateHouse(houseId) {
+// Continuous 1-second simulation that mimics a real sensor.
+// productionRange and consumptionRange are [min, max] in kWh per second.
+export async function startEnergySimulation(
+  houseId,
+  productionRange = [0.01, 0.05],
+  consumptionRange = [0.01, 0.04]
+) {
+  const [pMin, pMax] = productionRange;
+  const [cMin, cMax] = consumptionRange;
+
   console.log(
-    `Starting simulation for ${houseId} against ${BACKEND_URL}/energy/report (Ctrl+C to stop)...`
+    `Starting 1s energy simulation for ${houseId} against ${BACKEND_URL}/energy/report (Ctrl+C to stop)...`
+  );
+  console.log(
+    `Production range: [${pMin}, ${pMax}] kWh, Consumption range: [${cMin}, ${cMax}] kWh`
   );
 
-  // Basic model: solar generation higher during "day", consumption varies
   async function tick() {
-    const now = new Date();
-    const hour = now.getHours();
-
-    const daylightFactor = hour >= 7 && hour <= 18 ? 1 : 0.2;
-    const baseProduced = randomInRange(2, 5) * daylightFactor; // kWh in interval
-    const baseConsumed = randomInRange(1, 4); // kWh in interval
-
-    const produced = Number(baseProduced.toFixed(2));
-    const consumed = Number(baseConsumed.toFixed(2));
+    const produced = Number(randomInRange(pMin, pMax).toFixed(4));
+    const consumed = Number(randomInRange(cMin, cMax).toFixed(4));
 
     try {
       await sendEnergyData(houseId, produced, consumed);
@@ -71,9 +75,9 @@ async function simulateHouse(houseId) {
     }
   }
 
-  // Fire immediately, then every 5 seconds
+  // Fire immediately, then every 1 second
   await tick();
-  const interval = setInterval(tick, 5000);
+  const interval = setInterval(tick, 1000);
 
   process.on("SIGINT", () => {
     clearInterval(interval);
@@ -83,12 +87,12 @@ async function simulateHouse(houseId) {
 }
 
 async function main() {
-  const [, , modeOrHouse, arg2, arg3] = process.argv;
+  const [, , modeOrHouse, arg2, arg3, arg4, arg5] = process.argv;
 
   if (!modeOrHouse) {
     console.log("Usage:");
     console.log("  node energy-test.js <houseId> <energyProduced> <energyConsumed>");
-    console.log("  node energy-test.js simulate <houseId>");
+    console.log("  node energy-test.js simulate <houseId> [prodMin prodMax consMin consMax]");
     process.exit(1);
   }
 
@@ -98,7 +102,24 @@ async function main() {
       console.error("Missing houseId for simulate mode.");
       process.exit(1);
     }
-    await simulateHouse(houseId);
+    const prodMin = arg3 !== undefined ? Number(arg3) : 0.01;
+    const prodMax = arg4 !== undefined ? Number(arg4) : 0.05;
+    const consMin = arg5 !== undefined ? Number(arg5) : 0.01;
+    const consMax = process.argv[7] !== undefined ? Number(process.argv[7]) : 0.04;
+
+    if (
+      !Number.isFinite(prodMin) ||
+      !Number.isFinite(prodMax) ||
+      !Number.isFinite(consMin) ||
+      !Number.isFinite(consMax)
+    ) {
+      console.error(
+        "Invalid range values. Usage: node energy-test.js simulate <houseId> [prodMin prodMax consMin consMax]"
+      );
+      process.exit(1);
+    }
+
+    await startEnergySimulation(houseId, [prodMin, prodMax], [consMin, consMax]);
     return;
   }
 
