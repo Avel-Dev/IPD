@@ -35,6 +35,13 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
   const [energyConsumed, setEnergyConsumed] = useState(0);
   const [energySurplus, setEnergySurplus] = useState(0);
 
+  // House management state
+  const [houses, setHouses] = useState([]);
+  const [newHouseId, setNewHouseId] = useState("");
+  const [newMeterId, setNewMeterId] = useState("");
+  const [houseError, setHouseError] = useState("");
+  const [isCreatingHouse, setIsCreatingHouse] = useState(false);
+
   // Keep references to provider/signer so they can be cleared on disconnect
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
@@ -132,6 +139,14 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
       } catch {
         // If energy endpoint is not used yet, keep values at zero
       }
+
+      // Fetch houses owned by this wallet
+      try {
+        const data = await apiRequest("/houses/my");
+        setHouses(data?.houses || []);
+      } catch {
+        // Ignore for now; houses UI will show empty
+      }
     } catch (e) {
       setStatus("Disconnected");
       setError(e?.message || "Failed to load dashboard");
@@ -153,6 +168,32 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleCreateHouse(e) {
+    e.preventDefault();
+    setHouseError("");
+    if (!newHouseId.trim()) {
+      setHouseError("House ID is required.");
+      return;
+    }
+    setIsCreatingHouse(true);
+    try {
+      const created = await apiRequest("/houses/register", {
+        method: "POST",
+        body: JSON.stringify({
+          houseId: newHouseId.trim(),
+          meterId: newMeterId.trim() || undefined
+        })
+      });
+      setHouses((prev) => [...prev, created]);
+      setNewHouseId("");
+      setNewMeterId("");
+    } catch (err) {
+      setHouseError(err?.message || "Failed to register house.");
+    } finally {
+      setIsCreatingHouse(false);
+    }
+  }
 
   useEffect(() => {
     if (!ethereum) return;
@@ -268,6 +309,87 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
             value={`${energySurplus.toFixed(2)} kWh`}
             subtitle={energySurplus >= 0 ? "Net export to grid" : "Net import from grid"}
           />
+        </div>
+      </div>
+
+      {/* House Management Section */}
+      <div className="mt-10">
+        <h2 className="text-lg font-semibold text-white">House Management</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Register homes connected to this wallet and link them to energy reports.
+        </p>
+
+        <form onSubmit={handleCreateHouse} className="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-zinc-900/30 p-4 sm:grid-cols-[2fr,2fr,auto] sm:items-end">
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+              House ID
+            </label>
+            <input
+              type="text"
+              value={newHouseId}
+              onChange={(e) => setNewHouseId(e.target.value)}
+              placeholder="house_1"
+              className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+              Meter ID (optional)
+            </label>
+            <input
+              type="text"
+              value={newMeterId}
+              onChange={(e) => setNewMeterId(e.target.value)}
+              placeholder="meter_001"
+              className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isCreatingHouse}
+            className="mt-2 inline-flex items-center justify-center rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-0"
+          >
+            {isCreatingHouse ? "Registering..." : "Register House"}
+          </button>
+        </form>
+
+        {houseError && (
+          <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+            {houseError}
+          </div>
+        )}
+
+        <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900/30 p-4">
+          <h3 className="text-sm font-semibold text-white">My Houses</h3>
+          {houses.length === 0 ? (
+            <p className="mt-2 text-xs text-zinc-400">
+              No houses registered yet. Use the form above to add one.
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-2 text-xs text-zinc-300">
+              {houses.map((h) => (
+                <li
+                  key={h.houseId}
+                  className="flex flex-col rounded-lg border border-white/10 bg-zinc-950/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <div className="font-mono text-[11px] text-cyan-300">
+                      {h.houseId}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-zinc-400">
+                      Meter: {h.meterId || "—"}
+                    </div>
+                  </div>
+                  <div className="mt-1 text-[10px] text-zinc-500 sm:mt-0">
+                    Created:{" "}
+                    {h.createdAt
+                      ? new Date(h.createdAt).toLocaleString()
+                      : "unknown"}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </div>

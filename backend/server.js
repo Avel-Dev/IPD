@@ -8,6 +8,7 @@ import morgan from "morgan";
 import authRoutes from "./routes/auth.js";
 import { verifyToken } from "./middleware/auth.js";
 import energyRoutes from "./routes/energy.js";
+import housesRoutes from "./routes/houses.js";
 
 const app = express();
 const PORT = process.env.PORT || 5005;
@@ -19,7 +20,8 @@ app.use(morgan("dev"));
 app.get("/", (req, res) => res.json({ status: "ok", service: "minimal-backend" }));
 
 app.use("/auth", authRoutes);
-app.use("/energy", energyRoutes);
+app.use("/houses", verifyToken, housesRoutes);
+app.use("/energy", verifyToken, energyRoutes);
 
 // Example protected route for "dashboard" API calls
 app.get("/dashboard", verifyToken, (req, res) => {
