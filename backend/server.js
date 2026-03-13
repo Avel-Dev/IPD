@@ -11,6 +11,8 @@ import energyRoutes from "./routes/energy.js";
 import housesRoutes from "./routes/houses.js";
 import { initSchema } from "./db/initSchema.js";
 
+import settingsRoutes from "./routes/settings.js";
+
 const app = express();
 const PORT = process.env.PORT || 5005;
 
@@ -22,6 +24,7 @@ app.get("/", (req, res) => res.json({ status: "ok", service: "minimal-backend" }
 
 app.use("/auth", authRoutes);
 app.use("/houses", verifyToken, housesRoutes);
+app.use("/settings", settingsRoutes); // Already uses verifyToken internally or we can mount it with it. Wait, the routes have verifyToken inside.
 // Energy endpoints are left unauthenticated so that hardware/CLI simulators
 // can POST reports without needing a JWT. When a JWT is present, routes can
 // still use req.user for additional checks.

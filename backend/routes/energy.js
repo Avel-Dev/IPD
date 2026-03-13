@@ -65,6 +65,21 @@ router.post("/report", async (req, res) => {
       return res.status(500).json({ error: "Failed to store energy report" });
     }
 
+    // After storing the report, check for potential diversion
+    try {
+      if (surplusEnergy > 0) {
+        // dynamic import or just standard import at the top
+        // Let's add it via dynamic import for now to avoid breaking existing syntax if not imported at top
+        const monitor = await import("../services/surplusMonitor.js");
+        // Don't await the monitor so it doesn't block the API response
+        monitor.checkAndDivertSurplus(houseId, surplusEnergy).catch(e => {
+          console.error("Surplus monitor exception:", e);
+        });
+      }
+    } catch(err) {
+      console.error("Surplus monitor load exception:", err);
+    }
+
     return res.status(201).json(data);
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -186,6 +201,60 @@ router.get("/history/:houseId", verifyToken, async (req, res) => {
     // eslint-disable-next-line no-console
     console.error("Supabase history exception:", err);
     return res.status(500).json({ error: "Failed to load energy history" });
+  }
+});
+
+// GET /energy/diversion-stats
+router.get("/diversion-stats", verifyToken, async (req, res) => {
+  const walletAddress = req.user?.walletAddress;
+  if (!walletAddress) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    // 1. Get user's surplus limit
+    const { data: settings } = await supabase
+      .from("user_settings")
+      .select("surplus_limit")
+      .eq("wallet_address", walletAddress)
+      .maybeSingle();
+
+    const surplusLimit = settings?.surplus_limit ?? 0;
+
+    // 2. Get user's total diverted energy
+    // Note: Supabase JS client doesn't have a direct SUM function without RPC, 
+    // so we can either fetch all and sum, or use an RPC. Assuming low volume, fetch all and sum.
+    const { data: logs } = await supabase
+      .from("diversion_logs")
+      .select("amount")
+      .eq("wallet_address", walletAddress);
+
+    const energyDiverted = (logs || []).reduce((sum, row) => sum + (row.amount || 0), 0);
+
+    // 3. Get central battery level from smart contract
+    let centralBatteryLevel = 0;
+    try {
+      // Dynamic import ethers so we don't break existing stuff if strictly needed
+      const { ethers } = await import("ethers");
+      const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+      const contractAddress = process.env.ENERGY_TRADING_CONTRACT;
+      if (contractAddress) {
+        const abi = ["function centralBatteryLevel() view returns (uint256)"];
+        const contract = new ethers.Contract(contractAddress, abi, provider);
+        const levelInt = await contract.centralBatteryLevel();
+        // convert back from our x1000 scale
+        centralBatteryLevel = Number(levelInt) / 1000;
+      }
+    } catch(err) {
+      console.error("Failed to read central battery from contract", err);
+    }
+
+    return res.status(200).json({
+      surplusLimit,
+      energyDiverted,
+      centralBatteryLevel
+    });
+  } catch (err) {
+    console.error("diversion-stats error", err);
+    return res.status(500).json({ error: "Failed to fetch diversion stats" });
   }
 });
 

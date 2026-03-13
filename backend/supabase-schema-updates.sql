@@ -1,3 +1,20 @@
+-- User settings table for storing the surplus limit
+create table if not exists public.user_settings (
+  wallet_address text primary key,
+  surplus_limit float8,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Diversion logs table
+create table if not exists public.diversion_logs (
+  id uuid primary key default gen_random_uuid(),
+  wallet_address text not null,
+  amount float8 not null,
+  timestamp bigint not null,
+  created_at timestamptz default now()
+);
+
 -- Houses table
 create table if not exists public.houses (
   id uuid primary key default gen_random_uuid(),
@@ -14,23 +31,6 @@ create table if not exists public.energy_reports (
   energy_produced float8 not null,
   energy_consumed float8 not null,
   surplus_energy float8 not null,
-  timestamp bigint not null,
-  created_at timestamptz default now()
-);
-
--- User settings table for storing the surplus limit
-create table if not exists public.user_settings (
-  wallet_address text primary key,
-  surplus_limit float8,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-
--- Diversion logs table
-create table if not exists public.diversion_logs (
-  id uuid primary key default gen_random_uuid(),
-  wallet_address text not null,
-  amount float8 not null,
   timestamp bigint not null,
   created_at timestamptz default now()
 );
