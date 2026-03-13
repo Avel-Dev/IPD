@@ -9,6 +9,19 @@ export const HARDHAT_NETWORK = {
   blockExplorerUrls: []
 };
 
+const NETWORK_NAME_BY_CHAIN_ID = {
+  1: "Ethereum Mainnet",
+  11155111: "Sepolia Testnet",
+  [HARDHAT_CHAIN_ID_DEC]: "Hardhat Local Network"
+};
+
+export function getReadableNetworkName(chainId, fallbackName) {
+  if (!chainId && chainId !== 0) return fallbackName || "-";
+  const numId = Number(chainId);
+  if (Number.isNaN(numId)) return fallbackName || "Unknown Network";
+  return NETWORK_NAME_BY_CHAIN_ID[numId] || fallbackName || "Unknown Network";
+}
+
 export function shortenAddress(addr) {
   if (!addr) return "";
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;

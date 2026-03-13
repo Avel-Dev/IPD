@@ -5,7 +5,8 @@ import {
   getEthereum,
   HARDHAT_CHAIN_ID_DEC,
   HARDHAT_NETWORK,
-  shortenAddress
+  shortenAddress,
+  getReadableNetworkName
 } from "../lib/eth";
 
 function StatCard({ title, value, subtitle }) {
@@ -105,8 +106,9 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
       setProvider(browserProvider);
       setSigner(userSigner);
 
-      setNetworkName(network.name || "unknown");
-      setChainId(Number(network.chainId));
+      const numericChainId = Number(network.chainId);
+      setNetworkName(getReadableNetworkName(numericChainId, network.name));
+      setChainId(numericChainId);
       setBlockNumber(String(bn));
       setBalanceEth(`${Number(ethers.formatEther(bal)).toFixed(6)} ETH`);
       setStatus("Connected");
