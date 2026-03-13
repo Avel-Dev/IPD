@@ -40,6 +40,8 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
   const [selectedHouseId, setSelectedHouseId] = useState("");
   const [energyHistory, setEnergyHistory] = useState([]);
   const [historyError, setHistoryError] = useState("");
+  const [latestHistoryTimestamp, setLatestHistoryTimestamp] = useState(null);
+  const [highlightTimestamp, setHighlightTimestamp] = useState(null);
 
   // House management state
   const [houses, setHouses] = useState([]);
@@ -228,6 +230,17 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
         surplusEnergy: Number(r.surplus_energy ?? 0)
       }));
       setEnergyHistory(mapped);
+
+      if (mapped.length > 0) {
+        const newestTs = mapped[mapped.length - 1].timestamp;
+        setLatestHistoryTimestamp((prev) => {
+          if (prev == null || newestTs > prev) {
+            setHighlightTimestamp(newestTs);
+            return newestTs;
+          }
+          return prev;
+        });
+      }
     } catch (err) {
       setEnergyHistory([]);
       setHistoryError(err?.message || "Failed to load energy history.");
@@ -239,6 +252,23 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
     loadEnergyHistory(selectedHouseId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedHouseId]);
+
+  // Live updates for history: poll every 1.5s for the selected house
+  useEffect(() => {
+    if (!selectedHouseId) return;
+    const id = setInterval(() => {
+      loadEnergyHistory(selectedHouseId);
+    }, 1500);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedHouseId]);
+
+  // Clear row highlight shortly after it is applied so the newest row "pulses"
+  useEffect(() => {
+    if (!highlightTimestamp) return;
+    const id = setTimeout(() => setHighlightTimestamp(null), 800);
+    return () => clearTimeout(id);
+  }, [highlightTimestamp]);
 
   async function handleCreateHouse(e) {
     e.preventDefault();
@@ -424,6 +454,83 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
         )}
 
         <EnergyLineChart records={energyHistory} />
+      </div>
+
+      {/* Live Energy Feed Section */}
+      <div className="mt-10">
+        <h2 className="text-lg font-semibold text-white">Live Energy Feed</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Most recent energy reports for the selected house, updating every few seconds.
+        </p>
+
+        <div className="mt-3 rounded-2xl border border-white/10 bg-zinc-900/40 overflow-hidden">
+          <div className="max-h-80 overflow-y-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-zinc-900/80 text-zinc-400">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Timestamp</th>
+                  <th className="px-3 py-2 text-left font-medium">House ID</th>
+                  <th className="px-3 py-2 text-right font-medium">Produced (kWh)</th>
+                  <th className="px-3 py-2 text-right font-medium">Consumed (kWh)</th>
+                  <th className="px-3 py-2 text-right font-medium">Surplus (kWh)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {energyHistory.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-3 py-4 text-center text-zinc-500"
+                    >
+                      No energy reports yet for this house.
+                    </td>
+                  </tr>
+                ) : (
+                  [...energyHistory]
+                    .slice(-30) // latest up to 30 records
+                    .reverse() // newest first
+                    .map((r) => {
+                      const isNew = highlightTimestamp === r.timestamp;
+                      return (
+                        <tr
+                          key={`${r.houseId}-${r.timestamp}`}
+                          className={
+                            "border-t border-white/5 transition-colors " +
+                            (isNew
+                              ? "bg-emerald-500/10"
+                              : "hover:bg-zinc-800/60")
+                          }
+                        >
+                          <td className="px-3 py-2 text-zinc-300">
+                            {new Date(r.timestamp).toLocaleTimeString()}
+                          </td>
+                          <td className="px-3 py-2 text-zinc-400 font-mono">
+                            {r.houseId}
+                          </td>
+                          <td className="px-3 py-2 text-right text-zinc-300">
+                            {r.energyProduced.toFixed(4)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-zinc-300">
+                            {r.energyConsumed.toFixed(4)}
+                          </td>
+                          <td
+                            className={
+                              "px-3 py-2 text-right " +
+                              (r.surplusEnergy >= 0
+                                ? "text-emerald-300"
+                                : "text-red-300")
+                            }
+                          >
+                            {r.surplusEnergy.toFixed(4)}
+                          </td>
+                        </tr>
+                      );
+                    })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* House Management Section */}
