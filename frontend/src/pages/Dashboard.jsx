@@ -8,6 +8,7 @@ import {
   shortenAddress,
   getReadableNetworkName
 } from "../lib/eth";
+import { EnergyLineChart } from "../components/EnergyLineChart";
 
 function StatCard({ title, value, subtitle }) {
   return (
@@ -34,6 +35,11 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
   const [energyProduced, setEnergyProduced] = useState(0);
   const [energyConsumed, setEnergyConsumed] = useState(0);
   const [energySurplus, setEnergySurplus] = useState(0);
+
+  // Per-house energy history for visualization
+  const [selectedHouseId, setSelectedHouseId] = useState("");
+  const [energyHistory, setEnergyHistory] = useState([]);
+  const [historyError, setHistoryError] = useState("");
 
   // House management state
   const [houses, setHouses] = useState([]);
@@ -143,7 +149,11 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
       // Fetch houses owned by this wallet
       try {
         const data = await apiRequest("/houses/my");
-        setHouses(data?.houses || []);
+        const owned = data?.houses || [];
+        setHouses(owned);
+        if (!selectedHouseId && owned.length > 0) {
+          setSelectedHouseId(owned[0].houseId);
+        }
       } catch {
         // Ignore for now; houses UI will show empty
       }
@@ -168,6 +178,30 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadEnergyHistory(houseId) {
+    if (!houseId) {
+      setEnergyHistory([]);
+      setHistoryError("");
+      return;
+    }
+    try {
+      setHistoryError("");
+      const data = await apiRequest(
+        `/energy/history/${encodeURIComponent(houseId)}?limit=100`
+      );
+      setEnergyHistory(data?.records || []);
+    } catch (err) {
+      setEnergyHistory([]);
+      setHistoryError(err?.message || "Failed to load energy history.");
+    }
+  }
+
+  // Load history when selectedHouseId changes
+  useEffect(() => {
+    loadEnergyHistory(selectedHouseId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedHouseId]);
 
   async function handleCreateHouse(e) {
     e.preventDefault();
@@ -310,6 +344,49 @@ export function Dashboard({ onDisconnect, onWalletUpdated }) {
             subtitle={energySurplus >= 0 ? "Net export to grid" : "Net import from grid"}
           />
         </div>
+      </div>
+
+      {/* Energy Visualization Section */}
+      <div className="mt-10">
+        <h2 className="text-lg font-semibold text-white">Energy Visualization</h2>
+        <p className="mt-1 text-xs text-zinc-400">
+          Time-series view of produced, consumed, and surplus energy for a specific house.
+        </p>
+
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs text-zinc-400">
+            Select a house to visualize its energy history.
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+              House
+            </label>
+            <select
+              value={selectedHouseId}
+              onChange={(e) => setSelectedHouseId(e.target.value)}
+              className="rounded-lg border border-white/10 bg-zinc-950 px-3 py-1.5 text-xs text-white outline-none focus:border-cyan-400"
+              disabled={houses.length === 0}
+            >
+              {houses.length === 0 ? (
+                <option value="">No houses</option>
+              ) : (
+                houses.map((h) => (
+                  <option key={h.houseId} value={h.houseId}>
+                    {h.houseId}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+        </div>
+
+        {historyError && (
+          <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+            {historyError}
+          </div>
+        )}
+
+        <EnergyLineChart records={energyHistory} />
       </div>
 
       {/* House Management Section */}
