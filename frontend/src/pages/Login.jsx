@@ -4,7 +4,7 @@ import { ethers } from "ethers";
 import { apiRequest } from "../lib/api";
 import { getEthereum } from "../lib/eth";
 
-export function Login() {
+export function Login({ onWalletConnected }) {
   const navigate = useNavigate();
   const ethereum = useMemo(() => getEthereum(), []);
 
@@ -31,6 +31,9 @@ export function Login() {
 
       localStorage.setItem("mm_jwt", data.token);
       localStorage.setItem("mm_wallet", data.walletAddress);
+      if (typeof onWalletConnected === "function") {
+        onWalletConnected(data.walletAddress);
+      }
       navigate("/dashboard");
     } catch (e) {
       setError(e?.message || "Failed to connect wallet");

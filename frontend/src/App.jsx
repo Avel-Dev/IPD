@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Navbar } from "./components/Navbar";
 import { Login } from "./pages/Login";
@@ -12,17 +12,40 @@ function RequireAuth({ children }) {
 }
 
 export default function App() {
-  const walletAddress = localStorage.getItem("mm_wallet") || "";
+  const [walletAddress, setWalletAddress] = useState(
+    () => localStorage.getItem("mm_wallet") || ""
+  );
+
+  function handleWalletConnected(address) {
+    setWalletAddress(address || "");
+  }
+
+  function handleDisconnect() {
+    localStorage.removeItem("mm_jwt");
+    localStorage.removeItem("mm_wallet");
+    setWalletAddress("");
+    // Navigate back to login; using replace ensures dashboard isn't in history
+    window.history.replaceState(null, "", "/");
+    // Force a light reload of the current route so RequireAuth re-evaluates
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }
+
   return (
     <div className="min-h-screen">
-      <Navbar walletAddress={walletAddress} />
+      <Navbar walletAddress={walletAddress} onDisconnect={handleDisconnect} />
       <Routes>
-        <Route path="/" element={<Login />} />
+        <Route
+          path="/"
+          element={<Login onWalletConnected={handleWalletConnected} />}
+        />
         <Route
           path="/dashboard"
           element={
             <RequireAuth>
-              <Dashboard />
+              <Dashboard
+                onDisconnect={handleDisconnect}
+                onWalletUpdated={handleWalletConnected}
+              />
             </RequireAuth>
           }
         />

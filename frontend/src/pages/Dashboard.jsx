@@ -18,7 +18,7 @@ function StatCard({ title, value, subtitle }) {
   );
 }
 
-export function Dashboard() {
+export function Dashboard({ onDisconnect, onWalletUpdated }) {
   const ethereum = useMemo(() => getEthereum(), []);
 
   const [walletAddress, setWalletAddress] = useState(localStorage.getItem("mm_wallet") || "");
@@ -29,10 +29,32 @@ export function Dashboard() {
   const [status, setStatus] = useState("Disconnected");
   const [error, setError] = useState("");
 
+  // Keep references to provider/signer so they can be cleared on disconnect
+  const [provider, setProvider] = useState(null);
+  const [signer, setSigner] = useState(null);
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
 
   const onHardhat = chainId === HARDHAT_CHAIN_ID_DEC;
+
+  function handleLogout() {
+    localStorage.removeItem("mm_jwt");
+    localStorage.removeItem("mm_wallet");
+    setWalletAddress("");
+    setNetworkName("-");
+    setChainId(null);
+    setBalanceEth("-");
+    setBlockNumber("-");
+    setStatus("Disconnected");
+    setProvider(null);
+    setSigner(null);
+    if (typeof onDisconnect === "function") {
+      onDisconnect();
+    } else {
+      window.location.href = "/";
+    }
+  }
 
   async function switchToHardhat() {
     setError("");
@@ -70,11 +92,18 @@ export function Dashboard() {
       const auth = await apiRequest("/dashboard");
       setWalletAddress(auth.walletAddress);
       localStorage.setItem("mm_wallet", auth.walletAddress);
+      if (typeof onWalletUpdated === "function") {
+        onWalletUpdated(auth.walletAddress);
+      }
 
-      const provider = new ethers.BrowserProvider(ethereum);
-      const network = await provider.getNetwork();
-      const bn = await provider.getBlockNumber();
-      const bal = await provider.getBalance(auth.walletAddress);
+      const browserProvider = new ethers.BrowserProvider(ethereum);
+      const userSigner = await browserProvider.getSigner();
+      const network = await browserProvider.getNetwork();
+      const bn = await browserProvider.getBlockNumber();
+      const bal = await browserProvider.getBalance(auth.walletAddress);
+
+      setProvider(browserProvider);
+      setSigner(userSigner);
 
       setNetworkName(network.name || "unknown");
       setChainId(Number(network.chainId));
@@ -99,12 +128,12 @@ export function Dashboard() {
 
     function onAccountsChanged(accounts) {
       if (!accounts?.length) {
-        localStorage.removeItem("mm_jwt");
-        localStorage.removeItem("mm_wallet");
-        window.location.href = "/";
-        return;
+        // Wallet fully disconnected
+        handleLogout();
+      } else {
+        // Different account selected – treat as logout for security
+        handleLogout();
       }
-      window.location.reload();
     }
 
     function onChainChanged() {
