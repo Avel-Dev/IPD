@@ -1,8 +1,70 @@
 import express from "express";
 import { supabase } from "../supabaseClient.js";
 import { verifyToken } from "../middleware/auth.js";
+import { ethers } from "ethers";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+
+// Hardhat configuration
+const HARDHAT_URL = "http://127.0.0.1:8545";
+const HARDHAT_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+
+/**
+ * Get the deployed EnergyTrading contract address
+ */
+function getContractAddress() {
+  const deploymentPath = path.resolve(__dirname, "..", "..", "hardhat", "deployments", "EnergyTrading.json");
+  try {
+    if (fs.existsSync(deploymentPath)) {
+      const data = JSON.parse(fs.readFileSync(deploymentPath, "utf-8"));
+      return data.address;
+    }
+  } catch (err) {
+    console.error("[energy] Failed to read contract address:", err.message);
+  }
+  return null;
+}
+
+/**
+ * Call the EnergyTrading contract to record surplus (non-blocking, fire-and-forget)
+ * Converts kWh to wei (1 kWh = 10^18 wei for simplicity)
+ */
+async function recordSurplusOnChain(houseId, surplusKwh) {
+  const contractAddress = getContractAddress();
+  if (!contractAddress) {
+    console.log(`[energy] Skipping blockchain call - no contract address found`);
+    return;
+  }
+
+  try {
+    const provider = new ethers.JsonRpcProvider(HARDHAT_URL);
+    const signer = new ethers.Wallet(HARDHAT_PRIVATE_KEY, provider);
+
+    // Connect to contract with minimal ABI
+    const contract = new ethers.Contract(
+      contractAddress,
+      ["function recordSurplus(string houseId, uint256 amount)"],
+      signer
+    );
+
+    // Convert kWh to wei (assuming 1 kWh = 1e18 wei for demo purposes)
+    const amountInWei = ethers.parseEther(surplusKwh.toString());
+
+    const tx = await contract.recordSurplus(houseId, amountInWei);
+    console.log(`[energy] Blockchain tx sent for ${houseId}: ${tx.hash}`);
+    await tx.wait();
+    console.log(`[energy] Blockchain tx confirmed for ${houseId}: ${tx.hash}`);
+  } catch (err) {
+    // Log and skip - don't crash the main flow
+    console.error(`[energy] Blockchain call failed for ${houseId}: ${err.message}`);
+  }
+}
 
 // POST /energy/report
 router.post("/report", async (req, res) => {
@@ -68,13 +130,18 @@ router.post("/report", async (req, res) => {
     // After storing the report, check for potential diversion
     try {
       if (surplusEnergy > 0) {
-        // dynamic import or just standard import at the top
-        // Let's add it via dynamic import for now to avoid breaking existing syntax if not imported at top
-        const monitor = await import("../services/surplusMonitor.js");
-        // Don't await the monitor so it doesn't block the API response
-        monitor.checkAndDivertSurplus(houseId, surplusEnergy).catch(e => {
-          console.error("Surplus monitor exception:", e);
-        });
+        // Try to use surplus monitor if available
+        try {
+          const monitor = await import("../services/surplusMonitor.js");
+          monitor.checkAndDivertSurplus(houseId, surplusEnergy).catch(e => {
+            console.error("Surplus monitor exception:", e);
+          });
+        } catch (e) {
+          // If surplusMonitor doesn't exist, fall back to blockchain recording
+          recordSurplusOnChain(houseId, surplusEnergy).catch((err) => {
+            console.error("[energy] Background blockchain call failed:", err.message);
+          });
+        }
       }
     } catch(err) {
       console.error("Surplus monitor load exception:", err);
