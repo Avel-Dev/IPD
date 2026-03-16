@@ -124,3 +124,55 @@ node energy-test.js simulate house_1 0.01 0.05 0.01 0.04
    - Energy Monitoring section shows totals
    - Energy Visualization shows a line chart
    - Live Energy Feed shows incoming data
+
+## MQTT Pipeline (Arduino → PC)
+
+This section documents running the full MQTT stack for receiving energy data from an Arduino.
+
+### Install MQTT Dependencies
+
+```bash
+cd backend
+pip install -r requirements_mqtt.txt
+```
+
+### Start Mosquitto Broker
+
+```bash
+sudo systemctl start mosquitto
+```
+
+### Run MQTT Subscriber (Terminal)
+
+The subscriber forwards MQTT messages to the Express backend:
+
+```bash
+cd backend
+python mqtt_subscriber.py
+```
+
+### Run Serial-to-MQTT Bridge (with Arduino)
+
+When Arduino is connected via USB:
+
+```bash
+cd backend
+python serial_mqtt_pub.py --port /dev/ttyACM0 --baud 9600
+```
+
+### Or: Run Test Publisher (without hardware)
+
+To simulate data without an Arduino:
+
+```bash
+cd backend
+python mqtt_test.py
+```
+
+### Verify Data Flow
+
+In a separate terminal, subscribe to all energy topics:
+
+```bash
+mosquitto_sub -h localhost -t "energy/#" -v
+```
