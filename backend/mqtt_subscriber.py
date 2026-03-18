@@ -63,6 +63,14 @@ def on_message(client, userdata, msg):
         logger.warning(f"JSON parse error: {e} - Skipping message")
         return
 
+    # Convert snake_case to camelCase for backend API
+    if "house_id" in payload:
+        payload["houseId"] = payload.pop("house_id")
+    if "energy_produced" in payload:
+        payload["energyProduced"] = payload.pop("energy_produced")
+    if "energy_consumed" in payload:
+        payload["energyConsumed"] = payload.pop("energy_consumed")
+
     # Forward to backend
     try:
         response = requests.post(
