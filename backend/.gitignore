@@ -1,0 +1,7 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+*
+# Exception for serial-mqtt bridge files
+!arduino/*
+!serial_mqtt_bridge.py
+!mqtt_send_test.py
+!MQTT_SETUP.md
