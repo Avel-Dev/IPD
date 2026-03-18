@@ -12,38 +12,34 @@ Three-tier monorepo:
 - **Frontend**: React (Vite) + TailwindCSS + ethers.js
 - **Backend**: Express + JWT auth + Supabase (PostgreSQL)
 - **Blockchain**: Hardhat local network (chainId: 31337)
+- **Hardware**: Arduino energy meters → Serial → MQTT → Backend
 
-## Commands
+## Running the Full Stack
 
-### Start Backend
-```bash
-cd backend
-npm install
-npm run dev
-```
-Backend runs on `http://localhost:5005`
+The full stack requires 4 terminals:
 
-### Start Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Frontend runs on `http://localhost:5173`
-
-### Start Hardhat (optional - for blockchain features)
-```bash
-cd hardhat
-npm install
-npm run node        # Start local node (port 8545)
-npm run deploy      # Deploy contracts in another terminal
-```
+1. **Hardhat Node** - `cd hardhat && npm run node` (port 8545)
+2. **Deploy Contracts** - `cd hardhat && npm run deploy` (in another terminal)
+3. **Backend** - `cd backend && npm run dev` (port 5005)
+4. **Frontend** - `cd frontend && npm run dev` (port 5173)
 
 ### Simulate Energy Data
 ```bash
 cd backend
 node energy-test.js simulate house_1 0.01 0.05 0.01 0.04
 ```
+
+### Hardware Pipeline (MQTT)
+
+To receive data from Arduino energy meters:
+
+1. Start MQTT broker: `sudo systemctl start mosquitto`
+2. Run MQTT subscriber: `cd backend && python mqtt_subscriber.py`
+3. Run serial-to-MQTT bridge: `cd backend && python serial_mqtt_pub.py --port /dev/ttyACM0 --baud 9600`
+
+Or simulate without hardware: `cd backend && python mqtt_test.py`
+
+Python dependencies: `pip install -r requirements_mqtt.txt`
 
 ## Key API Endpoints
 
@@ -74,6 +70,8 @@ PORT=5005
 JWT_SECRET=dev_secret_change_me
 ```
 
+Copy from `backend/.env.example` to create your `.env`.
+
 ## Frontend Key Files
 
 - `src/lib/eth.js` - Hardhat network config, chain ID (31337), MetaMask utilities
@@ -85,3 +83,4 @@ JWT_SECRET=dev_secret_change_me
 - URL: `http://127.0.0.1:8545`
 - Chain ID: 31337 (decimal)
 - The dashboard auto-switches to Hardhat or prompts user if on wrong network
+- Deployed `EnergyTrading` contract address: `hardhat/deployments/EnergyTrading.json`
