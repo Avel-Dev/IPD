@@ -50,10 +50,18 @@ logger = logging.getLogger(__name__)
 
 def parse_json_line(line: str) -> dict | None:
     """Parse a single JSON line, returning None on parse error."""
+    line = line.strip()
+
+    # Quick sanity check - must start with { and end with }
+    if not line or line[0] != '{' or line[-1] != '}':
+        logger.debug(f"Skipping non-JSON line: {line[:50]}")
+        return None
+
     try:
-        return json.loads(line.strip())
+        # Decode with error handling, ignore invalid bytes
+        return json.loads(line)
     except json.JSONDecodeError as e:
-        logger.warning(f"JSON parse error: {e} - Line: {line.strip()[:100]}")
+        logger.debug(f"JSON parse error: {e} - Line: {line[:100]}")
         return None
 
 
@@ -64,9 +72,9 @@ class SerialMQTTBridge:
         self.serial_conn = None
         self.running = True
 
-        # MQTT client with CallbackAPIVersion.VERSION1
+        # MQTT client - use latest callback API version
         self.mqtt_client = mqtt.Client(
-            callback_api_version=mqtt.CallbackAPIVersion.VERSION1,
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             client_id="serial_mqtt_bridge"
         )
         self.mqtt_client.on_connect = self._on_connect
@@ -120,6 +128,9 @@ class SerialMQTTBridge:
                 timeout=1.0,
                 write_timeout=5.0
             )
+            # Allow Arduino to reset and flush any garbage
+            time.sleep(2)
+            self.serial_conn.reset_input_buffer()
             logger.info(f"Serial connected to {self.serial_port} @ {self.baud_rate} baud")
             return True
         except serial.SerialException as e:
@@ -149,11 +160,10 @@ class SerialMQTTBridge:
                 if not line:
                     continue
 
-                # Try decode, skip binary garbage
+                # Try decode with error handling
                 try:
-                    line_str = line.decode("utf-8").strip()
-                except UnicodeDecodeError:
-                    logger.debug(f"Skipping binary data: {line[:20]}")
+                    line_str = line.decode("utf-8", errors="ignore").strip()
+                except Exception:
                     continue
 
                 if not line_str:
@@ -161,9 +171,15 @@ class SerialMQTTBridge:
 
                 logger.info(f"Serial received: {line_str}")
 
+                # Quick sanity check - must start with { and end with }
+                if not line_str.startswith('{') or not line_str.endswith('}'):
+                    logger.debug(f"Skipping invalid JSON format: {line_str}")
+                    continue
+
                 # Parse JSON
                 data = parse_json_line(line_str)
                 if data is None:
+                    logger.warning(f"Failed to parse JSON: {line_str}")
                     continue
 
                 # Validate house_id
@@ -172,6 +188,7 @@ class SerialMQTTBridge:
                     logger.warning(f"Missing house_id field: {data}")
                     continue
 
+                logger.info(f"Parsed OK, house_id={house_id}, publishing to MQTT")
                 # Publish to MQTT
                 self.publish(house_id, data)
 
