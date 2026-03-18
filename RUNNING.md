@@ -160,6 +160,17 @@ cd backend
 python serial_mqtt_pub.py --port /dev/ttyACM0 --baud 9600
 ```
 
+**Important:** Ensure your Arduino is running the correct sketch:
+- The sketch is at `backend/arduino/serial_mqtt_bridge/serial_mqtt_bridge.ino`
+- Edit `HOUSE_ID` at the top to match your registered house (default: `house_1`)
+- The sketch sends JSON in format: `{"house_id":"house_1","energy_produced":0.050,"energy_consumed":0.030,"surplus_energy":0.020}`
+
+**Find your serial port:**
+```bash
+ls /dev/tty* | grep -E "USB|ACM"  # Linux
+mode                                 # Windows
+```
+
 ### Or: Run Test Publisher (without hardware)
 
 To simulate data without an Arduino:
@@ -169,10 +180,53 @@ cd backend
 python mqtt_test.py
 ```
 
+Or use the test sender for the two-way bridge (test.mosquitto.org):
+
+```bash
+cd backend
+python mqtt_send_test.py
+```
+
 ### Verify Data Flow
 
-In a separate terminal, subscribe to all energy topics:
+#### Subscribe to All Energy Topics
 
 ```bash
 mosquitto_sub -h localhost -t "energy/#" -v
+```
+
+This shows all messages from all houses. Output format:
+```
+energy/house_1/data {"house_id":"house_1","energy_produced":0.050,"energy_consumed":0.030,"surplus_energy":0.020}
+```
+
+#### Subscribe to Specific House
+
+```bash
+mosquitto_sub -h localhost -t "energy/house_1/data" -v
+```
+
+#### Subscribe to Incoming/Outgoing Topics (for two-way bridge)
+
+```bash
+# Watch Arduino → broker
+mosquitto_sub -h test.mosquitto.org -t "energy/arduino/outgoing" -v
+
+# Watch broker → Arduino
+mosquitto_sub -h test.mosquitto.org -t "energy/arduino/incoming" -v
+```
+
+#### Troubleshooting
+
+```bash
+# Check if mosquitto is running
+systemctl status mosquitto
+# or
+netstat -tlnp | grep 1883
+
+# Test publishing manually
+mosquitto_pub -t "energy/test/data" -m '{"house_id":"test","energy_produced":0.05}'
+
+# Install mosquitto tools if missing
+sudo apt install mosquitto-clients
 ```
