@@ -25,13 +25,24 @@ export function EnergyLineChart({ records, height = 220 }) {
   const maxT = Math.max(...timestamps);
   const timeSpan = maxT - minT || 1;
 
-  const maxY = Math.max(
-    1,
-    ...producedValues,
-    ...consumedValues,
-    ...surplusValues
-  );
-  const minY = 0;
+  // Dynamic Y-axis scaling with padding
+  const allValues = [...producedValues, ...consumedValues, ...surplusValues];
+  let rawMin = Math.min(...allValues);
+  let rawMax = Math.max(...allValues);
+
+  // Handle edge cases: all values equal or very close
+  const minRange = 0.5; // Minimum enforced range
+  if (rawMax - rawMin < minRange) {
+    const center = rawMax;
+    rawMin = center - minRange / 2;
+    rawMax = center + minRange / 2;
+  }
+
+  // Add 15% padding above max and below min
+  const padding = (rawMax - rawMin) * 0.15 || 0.1;
+  const minY = rawMin - padding;
+  const maxY = rawMax + padding;
+
   const valueSpan = maxY - minY || 1;
 
   const plotWidth = width - paddingLeft - paddingRight;
