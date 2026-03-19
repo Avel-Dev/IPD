@@ -4,42 +4,67 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Minimal MetaMask + Energy Telemetry Demo - a self-contained blockchain web application for monitoring household energy production/consumption. Users connect via MetaMask, register houses, and view real-time energy data.
+Minimal MetaMask + Energy Telemetry Demo - a self-contained blockchain web application for monitoring household energy production/consumption. Users connect via MetaMask, register houses, and view real-time energy data from Arduino hardware or simulation.
 
 ## Architecture
 
-Three-tier monorepo:
-- **Frontend**: React (Vite) + TailwindCSS + ethers.js
-- **Backend**: Express + JWT auth + Supabase (PostgreSQL)
-- **Blockchain**: Hardhat local network (chainId: 31337)
+Four-tier monorepo:
+- **Frontend**: React (Vite) + TailwindCSS + ethers.js (port 5173)
+- **Backend**: Express + JWT auth + Supabase (port 5005)
+- **Blockchain**: Hardhat local network (port 8545, chainId: 31337)
 - **Hardware**: Arduino energy meters → Serial → MQTT → Backend
 
-## Running the Full Stack
+## Common Commands
 
-The full stack requires 4 terminals:
+```bash
+# Install all dependencies
+cd backend && npm install
+cd frontend && npm install
+cd hardhat && npm install
 
-1. **Hardhat Node** - `cd hardhat && npm run node` (port 8545)
-2. **Deploy Contracts** - `cd hardhat && npm run deploy` (in another terminal)
-3. **Backend** - `cd backend && npm run dev` (port 5005)
-4. **Frontend** - `cd frontend && npm run dev` (port 5173)
+# Start the full stack (4 terminals)
 
-### Simulate Energy Data
+# Terminal 1: Hardhat node
+cd hardhat && npm run node
+
+# Terminal 2: Deploy contracts
+cd hardhat && npm run deploy
+
+# Terminal 3: Backend
+cd backend && npm run dev
+
+# Terminal 4: Frontend
+cd frontend && npm run dev
+```
+
+### Simulate Energy Data (no hardware needed)
 ```bash
 cd backend
 node energy-test.js simulate house_1 0.01 0.05 0.01 0.04
 ```
 
-### Hardware Pipeline (MQTT)
+### Hardware Pipeline (Arduino + MQTT)
+```bash
+# Install Python dependencies
+pip install -r requirements_mqtt.txt
 
-To receive data from Arduino energy meters:
+# Start MQTT broker
+sudo systemctl start mosquitto
 
-1. Start MQTT broker: `sudo systemctl start mosquitto`
-2. Run MQTT subscriber: `cd backend && python mqtt_subscriber.py`
-3. Run serial-to-MQTT bridge: `cd backend && python serial_mqtt_pub.py --port /dev/ttyACM0 --baud 9600`
+# Terminal: MQTT subscriber (forwards to backend)
+python mqtt_subscriber.py
 
-Or simulate without hardware: `cd backend && python mqtt_test.py`
+# Terminal: Serial-to-MQTT bridge (with Arduino)
+python serial_mqtt_pub.py --port /dev/ttyACM0 --baud 9600
 
-Python dependencies: `pip install -r requirements_mqtt.txt`
+# Or simulate without hardware
+python mqtt_test.py
+```
+
+### Find Arduino serial port
+```bash
+ls /dev/tty* | grep -E "USB|ACM"
+```
 
 ## Key API Endpoints
 
@@ -72,15 +97,23 @@ JWT_SECRET=dev_secret_change_me
 
 Copy from `backend/.env.example` to create your `.env`.
 
-## Frontend Key Files
+## Key Source Files
 
-- `src/lib/eth.js` - Hardhat network config, chain ID (31337), MetaMask utilities
-- `src/lib/api.js` - API client with JWT handling
-- `src/pages/Dashboard.jsx` - Main energy monitoring dashboard with charts
+- `frontend/src/lib/eth.js` - Hardhat network config, chain ID (31337), MetaMask utilities
+- `frontend/src/lib/api.js` - API client with JWT handling
+- `frontend/src/pages/Dashboard.jsx` - Main energy monitoring dashboard
+- `frontend/src/components/EnergyLineChart.jsx` - SVG time-series chart
+- `backend/server.js` - Express server with all API routes
+- `backend/supabaseClient.js` - Supabase database client
+- `hardhat/contracts/EnergyTrading.sol` - Smart contract
 
 ## Hardhat Network
 
 - URL: `http://127.0.0.1:8545`
 - Chain ID: 31337 (decimal)
+- Deployed contract: `hardhat/deployments/EnergyTrading.json`
 - The dashboard auto-switches to Hardhat or prompts user if on wrong network
-- Deployed `EnergyTrading` contract address: `hardhat/deployments/EnergyTrading.json`
+
+## Arduino Sketch
+
+The Arduino sketch is at `backend/arduino/serial_mqtt_bridge/serial_mqtt_bridge.ino`. Set `HOUSE_ID` to match your registered house. It publishes JSON to MQTT topic `energy/<house_id>/data`.
