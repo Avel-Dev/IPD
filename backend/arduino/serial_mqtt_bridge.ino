@@ -2,7 +2,7 @@
 // Sends energy telemetry JSON - memory efficient, non-blocking
 
 // ===== CONFIGURATION =====
-const char* HOUSE_ID = "house_1";  // Change this to your house ID
+const char* HOUSE_ID = "house_3";  // Change this to your house ID
 const unsigned long SEND_INTERVAL = 3000;  // 3 seconds
 // =========================
 
